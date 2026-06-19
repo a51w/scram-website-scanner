@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Web Safety Scanner</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    :root {
+      --bg:      #070b14;
+      --surface: #0d1526;
+      --border:  #162035;
+      --text:    #e2e8f0;
+      --muted:   #4a5568;
+      --safe:    #10b981;
+      --warn:    #f59e0b;
+      --danger:  #f43f5e;
+      --accent:  #6366f1;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      width: 320px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 12px;
+      overflow: hidden;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      flex: 1; padding: 10px 0; text-align: center;
+      font-size: 11px; font-weight: 600; letter-spacing: .4px;
+      color: var(--muted); cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all .2s;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Header ── */
+    .header {
+      background: var(--surface);
+      padding: 12px 14px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .header-title { font-size: 13px; font-weight: 700; color: #f1f5f9; }
+    .header-sub   { font-size: 9px; color: var(--muted); letter-spacing: 1.2px; text-transform: uppercase; }
+    .server-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--safe); margin-left: auto;
+      box-shadow: 0 0 5px var(--safe);
+      animation: pulse 2s infinite;
+    }
+    .server-dot.offline { background: var(--danger); box-shadow: 0 0 5px var(--danger); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── URL bar ── */
+    .url-bar {
+      margin: 10px 12px 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px; color: #64748b;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ── Result Card ── */
+    .result-card {
+      margin: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .result-card.safe    { border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.06); }
+    .result-card.suspicious { border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.06); }
+    .result-card.dangerous  { border-color: rgba(244,63,94,.35);  background: rgba(244,63,94,.06); }
+
+    .result-main {
+      padding: 14px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .result-icon { font-size: 32px; line-height: 1; flex-shrink: 0; }
+    .result-label { font-size: 17px; font-weight: 700; margin-bottom: 2px; }
+    .result-label.safe    { color: var(--safe); }
+    .result-label.suspicious { color: var(--warn); }
+    .result-label.dangerous  { color: var(--danger); }
+    .result-sub { font-size: 10px; color: var(--muted); }
+
+    /* Score strip */
+    .score-strip {
+      padding: 8px 14px 12px;
+      border-top: 1px solid var(--border);
+    }
+    .score-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 5px;
+    }
+    .score-label { font-size: 9px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+    .score-val   { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; }
+    .bar-track { height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; }
+    .bar-fill  { height: 100%; border-radius: 2px; transition: width 1s cubic-bezier(.4,0,.2,1); width: 0; }
+
+    /* ── Flags ── */
+    .flags { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 3px; }
+    .flag {
+      display: flex; align-items: flex-start; gap: 7px;
+      padding: 5px 8px; border-radius: 6px; font-size: 11px;
+    }
+    .flag.bad  { background: rgba(244,63,94,.07);  color: #fca5a5; }
+    .flag.good { background: rgba(16,185,129,.07); color: #86efac; }
+    .flag-icon { flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Explanation box ── */
+    .explain-box {
+      margin: 0 12px 10px;
+      background: rgba(99,102,241,.07);
+      border: 1px solid rgba(99,102,241,.2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 11px;
+      color: #a5b4fc;
+      line-height: 1.55;
+    }
+    .explain-box b { color: #c7d2fe; display: block; margin-bottom: 4px; font-size: 11px; }
+
+    /* ── Confidence row ── */
+    .meta-row {
+      display: flex; gap: 6px;
+      padding: 0 12px 12px;
+    }
+    .meta-chip {
+      flex: 1; background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px; padding: 6px 8px; text-align: center;
+    }
+    .meta-chip-label { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
+    .meta-chip-val   { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; }
+
+    /* ── Scan button ── */
+    .scan-btn {
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      width: calc(100% - 24px); margin: 0 12px 12px;
+      padding: 9px; border: none; border-radius: 8px;
+      background: linear-gradient(135deg, #4f46e5, #6366f1);
+      color: white; font-family: 'Inter', sans-serif;
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all .2s;
+    }
+    .scan-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .scan-btn:disabled { opacity: .45; cursor: not-allowed; transform: none; filter: none; }
+
+    .spinner {
+      width: 13px; height: 13px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.25); border-top-color: white;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Scanning state ── */
+    .scanning-state {
+      padding: 18px 14px;
+      display: flex; align-items: center; gap: 10px;
+      color: var(--muted); font-size: 12px;
+    }
+
+    /* ── Error ── */
+    .error-box {
+      margin: 10px 12px;
+      background: rgba(244,63,94,.07);
+      border: 1px solid rgba(244,63,94,.2);
+      border-radius: 8px; padding: 10px 12px;
+      font-size: 11px; color: #fca5a5; display: none;
+      line-height: 1.5;
+    }
+    .error-box code {
+      background: rgba(0,0,0,.3); padding: 1px 4px;
+      border-radius: 3px; font-size: 10px;
+    }
+
+    /* ── History Tab ── */
+    .history-list { padding: 8px 12px 12px; }
+    .history-empty {
+      text-align: center; color: var(--muted);
+      padding: 30px 0; font-size: 11px;
+    }
+    .history-empty .empty-icon { font-size: 28px; margin-bottom: 8px; }
+
+    .history-item {
+      display: flex; align-items: center; gap: 9px;
+      padding: 8px 10px; border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      margin-bottom: 5px; cursor: pointer;
+      transition: background .15s;
+    }
+    .history-item:hover { background: #162035; }
+    .h-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .h-dot.safe    { background: var(--safe); }
+    .h-dot.suspicious { background: var(--warn); }
+    .h-dot.dangerous  { background: var(--danger); }
+    .h-info { flex: 1; overflow: hidden; }
+    .h-domain { font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .h-time   { font-size: 9px; color: var(--muted); margin-top: 1px; }
+    .h-badge  {
+      font-size: 9px; font-weight: 600; padding: 2px 6px;
+      border-radius: 4px; flex-shrink: 0;
+    }
+    .h-badge.safe    { background: rgba(16,185,129,.15); color: var(--safe); }
+    .h-badge.suspicious { background: rgba(245,158,11,.15); color: var(--warn); }
+    .h-badge.dangerous  { background: rgba(244,63,94,.15);  color: var(--danger); }
+
+    .clear-btn {
+      width: 100%; padding: 7px; background: none;
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); font-size: 11px; cursor: pointer;
+      margin-top: 4px; transition: all .2s;
+    }
+    .clear-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 6px 12px;
+      display: flex; justify-content: space-between;
+      font-size: 9px; color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <span style="font-size:18px">🛡️</span>
+    <div>
+      <div class="header-title">Web Safety Scanner</div>
+      <div class="header-sub">Shake Check • AI Powered</div>
+    </div>
+    <div class="server-dot" id="serverDot"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="scan">🔍 Scan</div>
+    <div class="tab" data-tab="history">🕘 History</div>
+  </div>
+
+  <!-- ═══ SCAN TAB ═══ -->
+  <div class="tab-content active" id="tab-scan">
+
+    <div class="url-bar" id="urlBar">Loading...</div>
+
+    <!-- Scanning state -->
+    <div class="scanning-state" id="scanningState" style="display:none">
+      <div class="spinner"></div>
+      <span>Analyzing website security...</span>
+    </div>
+
+    <!-- Result card -->
+    <div class="result-card" id="resultCard" style="display:none">
+      <div class="result-main">
+        <span class="result-icon" id="resultIcon"></span>
+        <div>
+          <div class="result-label" id="resultLabel"></div>
+          <div class="result-sub"  id="resultSub"></div>
+        </div>
+      </div>
+      <div class="score-strip">
+        <div class="score-row">
+          <span class="score-label">Safety Score</span>
+          <span class="score-val" id="scoreVal"></span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+      </div>
+    </div>
+
+    <!-- Flags -->
+    <div class="flags" id="flagsList" style="display:none"></div>
+
+    <!-- Risk explanation -->
+    <div class="explain-box" id="explainBox" style="display:none"></div>
+
+    <!-- ML + Rule meta -->
+    <div class="meta-row" id="metaRow" style="display:none">
+      <div class="meta-chip">
+        <div class="meta-chip-label">ML Confidence</div>
+        <div class="meta-chip-val" id="mlConf">—</div>
+      </div>
+      <div class="meta-chip">
+        <div class="meta-chip-label">Rule Score</div>
+        <div class="meta-chip-val" id="ruleScore">—</div>
+      </div>
+      <div class="meta-chip">
+        <div class="meta-chip-label">Domain Age</div>
+        <div class="meta-chip-val" id="domainAge">—</div>
+      </div>
+    </div>
+
+
+    <!-- Vision AI summary -->
+    <div class="vision-box" id="visionBox" style="display:none">
+      <b>👁️ AI Visual Analysis</b>
+      <span id="visionSummary"></span>
+      <span class="vision-score" id="visionScore"></span>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="errorBox">
+      ⚠️ Cannot connect to server.<br/>
+      Make sure <code>python app.py</code> is running on port 5000.
+    </div>
+
+    <!-- Scan button -->
+    <button class="scan-btn" id="scanBtn">
+      <span>🔍</span><span>Scan this page</span>
+    </button>
+
+  </div>
+
+  <!-- ═══ HISTORY TAB ═══ -->
+  <div class="tab-content" id="tab-history">
+    <div class="history-list">
+      <div class="history-empty" id="historyEmpty">
+        <div class="empty-icon">📭</div>
+        No scan history yet.<br/>Start scanning websites!
+      </div>
+      <div id="historyItems"></div>
+      <button class="clear-btn" id="clearBtn" style="display:none">🗑 Clear history</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>Web Safety Scanner v1.1</span>
+    <span id="scanTime"></span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+<!-- vision summary box styles (append to existing style) -->
+<style>
+  .vision-box {
+    margin: 0 12px 10px;
+    background: rgba(139,92,246,.08);
+    border: 1px solid rgba(139,92,246,.25);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 11px;
+    color: #c4b5fd;
+    line-height: 1.5;
+  }
+  .vision-box b {
+    display: flex; align-items: center; gap: 5px;
+    color: #ddd6fe; font-size: 11px; margin-bottom: 4px;
+  }
+  .vision-score {
+    display: inline-block;
+    margin-top: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: #a78bfa;
+  }
+</style>
